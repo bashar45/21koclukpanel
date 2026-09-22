@@ -116,7 +116,17 @@ export async function clearInbox(contactId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function mediaUrl(path: string): Promise<string | null> {
-  const { data } = await sb.storage.from("inbound-media").createSignedUrl(path, 3600);
-  return data?.signedUrl ?? null;
+// Kullanıcının gönderdiği medya inbound-media bucket'ında, dışarıya kapalı.
+// Panel imzalı URL üretiyor; izni storage.objects üzerindeki admin_read_media
+// politikası veriyor. Tek tek değil toplu üretiyoruz: bir sohbette 21 gün
+// boyunca yirmiden fazla fotoğraf olabilir.
+export async function mediaUrls(paths: string[]): Promise<Record<string, string>> {
+  if (paths.length === 0) return {};
+  const { data, error } = await sb.storage.from("inbound-media").createSignedUrls(paths, 3600);
+  if (error || !data) return {};
+  const map: Record<string, string> = {};
+  for (const d of data) {
+    if (d.path && d.signedUrl) map[d.path] = d.signedUrl;
+  }
+  return map;
 }

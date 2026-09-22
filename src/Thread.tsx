@@ -6,6 +6,7 @@ import {
   fetchEnrollment,
   fetchThread,
   type InboxRow,
+  mediaUrls,
   type Message,
   sendReply,
 } from "./supabase";
@@ -37,11 +38,21 @@ export default function Thread({
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
+  const [media, setMedia] = useState<Record<string, string>>({});
+
   const load = useCallback(async () => {
     const [m, e] = await Promise.all([fetchThread(row.contact_id), fetchEnrollment(row.contact_id)]);
     setMsgs(m);
     setEnr(e);
     if (e) setContract(await fetchContract(e.id));
+
+    // İmzalı URL'ler bir saat geçerli; sadece henüz çözülmemiş yolları iste
+    const paths = m.map((x) => x.storage_path).filter((p): p is string => !!p);
+    setMedia((cur) => {
+      const missing = paths.filter((p) => !cur[p]);
+      if (missing.length) mediaUrls(missing).then((got) => setMedia((c) => ({ ...c, ...got })));
+      return cur;
+    });
   }, [row.contact_id]);
 
   useEffect(() => {
@@ -147,8 +158,9 @@ export default function Thread({
                 (m.risk_flag ? " flagged" : "")
               }
             >
-              {m.body || `[${m.type}]`}
-              {m.storage_path && <div className="stamp">📎 medya kayıtlı</div>}
+              <Media msg={m} url={m.storage_path ? media[m.storage_path] : undefined} />
+              {m.body && <div className={m.type === "text" ? "" : "cap"}>{m.body}</div>}
+              {!m.body && m.type === "text" && `[boş mesaj]`}
               <div className="stamp">
                 <span>{time(m.created_at)}</span>
                 {m.direction === "out" && <span>{statusLabel(m.status)}</span>}
@@ -194,6 +206,37 @@ export default function Thread({
         </div>
       </div>
     </>
+  );
+}
+
+// Kanıt fotoğrafı günlük döngünün kalbi: koç onu görmeden günü
+// değerlendiremez. Ses kaydı da aynı şekilde çalınabilir olmalı.
+function Media({ msg, url }: { msg: Message; url?: string }) {
+  if (msg.type === "text" || msg.type === "button") return null;
+
+  // copy_media işi henüz çalışmamış olabilir (mesaj yeni geldiyse)
+  if (!msg.storage_path) {
+    return <div className="stamp">📎 {msg.type} — indiriliyor…</div>;
+  }
+  if (!url) return <div className="stamp">📎 {msg.type} — yükleniyor…</div>;
+
+  if (msg.type === "image") {
+    return (
+      <a href={url} target="_blank" rel="noreferrer">
+        <img className="media" src={url} alt="Kanıt fotoğrafı" loading="lazy" />
+      </a>
+    );
+  }
+  if (msg.type === "audio") {
+    return <audio className="media" controls preload="none" src={url} />;
+  }
+  if (msg.type === "video") {
+    return <video className="media" controls preload="metadata" src={url} />;
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="stamp">
+      📎 {msg.type} — indir
+    </a>
   );
 }
 

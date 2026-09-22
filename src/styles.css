@@ -141,3 +141,12 @@ input, textarea { font: inherit; color: inherit; }
 }
 .login .send { width: 100%; margin-top: 16px; padding: 10px; }
 .err { color: var(--risk); font-size: .85rem; margin-top: 10px; }
+
+/* ---------- medya ---------- */
+.media {
+  display: block; max-width: 100%; width: 260px; max-height: 340px;
+  object-fit: cover; border-radius: 8px; margin-bottom: 6px; background: var(--bg);
+}
+audio.media, video.media { width: 260px; height: auto; object-fit: initial; }
+/* fotoğraf açıklaması (caption): kullanıcının öz değerlendirmesi buraya gelir */
+.cap { margin-top: 2px; }
