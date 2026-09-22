@@ -39,21 +39,35 @@ export default function Thread({
   const bottom = useRef<HTMLDivElement>(null);
 
   const [media, setMedia] = useState<Record<string, string>>({});
+  const [mediaError, setMediaError] = useState(false);
 
   const load = useCallback(async () => {
     const [m, e] = await Promise.all([fetchThread(row.contact_id), fetchEnrollment(row.contact_id)]);
     setMsgs(m);
     setEnr(e);
     if (e) setContract(await fetchContract(e.id));
-
-    // İmzalı URL'ler bir saat geçerli; sadece henüz çözülmemiş yolları iste
-    const paths = m.map((x) => x.storage_path).filter((p): p is string => !!p);
-    setMedia((cur) => {
-      const missing = paths.filter((p) => !cur[p]);
-      if (missing.length) mediaUrls(missing).then((got) => setMedia((c) => ({ ...c, ...got })));
-      return cur;
-    });
   }, [row.contact_id]);
+
+  // İmzalı URL'ler ayrı bir effect'te çözülüyor. Daha önce setMedia
+  // updater'ının içinden çağrılıyordu; bir state güncelleyicisinin içinde
+  // yan etki başlatmak React'te yanlış ve sessizce atlanabiliyor.
+  const mediaPaths = msgs.map((m) => m.storage_path).filter((p): p is string => !!p).join("|");
+  useEffect(() => {
+    const paths = mediaPaths ? mediaPaths.split("|") : [];
+    const missing = paths.filter((p) => !media[p]);
+    if (missing.length === 0) return;
+    let alive = true;
+    mediaUrls(missing).then((got) => {
+      if (!alive) return;
+      if (Object.keys(got).length === 0) setMediaError(true);
+      else setMedia((c) => ({ ...c, ...got }));
+    });
+    return () => {
+      alive = false;
+    };
+    // media'yı bağımlılığa koymuyoruz: her çözülen URL yeni tur başlatırdı
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaPaths]);
 
   useEffect(() => {
     setMsgs([]);
@@ -158,7 +172,7 @@ export default function Thread({
                 (m.risk_flag ? " flagged" : "")
               }
             >
-              <Media msg={m} url={m.storage_path ? media[m.storage_path] : undefined} />
+              <Media msg={m} url={m.storage_path ? media[m.storage_path] : undefined} failed={mediaError} />
               {m.body && <div className={m.type === "text" ? "" : "cap"}>{m.body}</div>}
               {!m.body && m.type === "text" && `[boş mesaj]`}
               <div className="stamp">
@@ -211,14 +225,22 @@ export default function Thread({
 
 // Kanıt fotoğrafı günlük döngünün kalbi: koç onu görmeden günü
 // değerlendiremez. Ses kaydı da aynı şekilde çalınabilir olmalı.
-function Media({ msg, url }: { msg: Message; url?: string }) {
+function Media({ msg, url, failed }: { msg: Message; url?: string; failed?: boolean }) {
   if (msg.type === "text" || msg.type === "button") return null;
 
   // copy_media işi henüz çalışmamış olabilir (mesaj yeni geldiyse)
   if (!msg.storage_path) {
     return <div className="stamp">📎 {msg.type} — indiriliyor…</div>;
   }
-  if (!url) return <div className="stamp">📎 {msg.type} — yükleniyor…</div>;
+  if (!url) {
+    // Sessizce "yükleniyor" yazıp beklemek en kötüsü: koç medyanın
+    // geldiğini bilmez. İmzalama başarısız olduysa bunu söylüyoruz.
+    return (
+      <div className="stamp">
+        📎 {msg.type} — {failed ? "açılamadı (izin ya da bağlantı)" : "yükleniyor…"}
+      </div>
+    );
+  }
 
   if (msg.type === "image") {
     return (
