@@ -4,7 +4,10 @@ import {
   type Enrollment,
   fetchContract,
   fetchEnrollment,
+  fetchProgress,
   fetchThread,
+  type DayProgress,
+  type Tone,
   type InboxRow,
   mediaUrls,
   type Message,
@@ -33,6 +36,7 @@ export default function Thread({
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [enr, setEnr] = useState<Enrollment | null>(null);
   const [contract, setContract] = useState<string | null>(null);
+  const [days, setDays] = useState<DayProgress[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +49,10 @@ export default function Thread({
     const [m, e] = await Promise.all([fetchThread(row.contact_id), fetchEnrollment(row.contact_id)]);
     setMsgs(m);
     setEnr(e);
-    if (e) setContract(await fetchContract(e.id));
+    if (e) {
+      setContract(await fetchContract(e.id));
+      setDays(await fetchProgress(e.id));
+    }
   }, [row.contact_id]);
 
   // İmzalı URL'ler ayrı bir effect'te çözülüyor. Daha önce setMedia
@@ -72,6 +79,7 @@ export default function Thread({
   useEffect(() => {
     setMsgs([]);
     setContract(null);
+    setDays([]);
     setError(null);
     load();
     const t = setInterval(load, 10_000);
@@ -131,8 +139,9 @@ export default function Thread({
         </button>
       </div>
 
-      {(answerRows.length > 0 || contract || enr?.why) && (
+      {(days.length > 0 || answerRows.length > 0 || contract || enr?.why) && (
         <div style={{ paddingTop: 12, flex: "0 0 auto", maxHeight: "40%", overflowY: "auto" }}>
+          {days.length > 0 && <Progress days={days} />}
           {answerRows.length > 0 && (
             <div className="card">
               <h3>Onboarding cevapları</h3>
@@ -220,6 +229,71 @@ export default function Thread({
         </div>
       </div>
     </>
+  );
+}
+
+// 21 günün deseni. Koçun tek bakışta görmesi gereken şey tek tek günler
+// değil, RİTİM: nerede üst üste zor günler var, nerede sessizlik başladı.
+// Bu yüzden 7'şerli üç satır — takvim gibi okunuyor.
+const TONE_TEXT: Record<Tone, string> = {
+  strong: "güçlü gün",
+  partial: "kısmi",
+  hard: "zorlandı",
+};
+const TONE_MARK: Record<Tone, string> = { strong: "🔥", partial: "🌱", hard: "🤍" };
+
+function Progress({ days }: { days: DayProgress[] }) {
+  const byDay = new Map(days.map((d) => [d.day_no, d]));
+  const answered = days.filter((d) => d.evening_answer_tone);
+  const counts = {
+    strong: answered.filter((d) => d.evening_answer_tone === "strong").length,
+    partial: answered.filter((d) => d.evening_answer_tone === "partial").length,
+    hard: answered.filter((d) => d.evening_answer_tone === "hard").length,
+  };
+
+  // Son üç cevabın hepsi "zor" ise koç bunu kaçırmamalı: bırakma
+  // genelde sessizlikten önce üst üste zor günlerle haber verir.
+  const son = answered.slice(-3);
+  const alarm = son.length === 3 && son.every((d) => d.evening_answer_tone === "hard");
+
+  return (
+    <div className="card">
+      <h3>21 günün gidişi</h3>
+      <div className="grid21">
+        {Array.from({ length: 21 }, (_, i) => i + 1).map((n) => {
+          const d = byDay.get(n);
+          const tone = d?.evening_answer_tone ?? null;
+          const parts = [
+            `Gün ${n}`,
+            d?.for_date ?? "henüz gelmedi",
+            d?.ready_at ? "adımı açtı" : d ? "adımı açmadı" : "",
+            d?.completed_at ? "fotoğraf geldi" : "",
+            d?.evening_answer_label ?? "",
+          ].filter(Boolean);
+          return (
+            <div
+              key={n}
+              className={"cell" + (tone ? ` t-${tone}` : d ? " t-none" : " t-future")}
+              title={parts.join(" · ")}
+            >
+              <span className="n">{n}</span>
+              <span className="m">{tone ? TONE_MARK[tone] : d ? "·" : ""}</span>
+              {d?.completed_at && <span className="dot" title="kanıt fotoğrafı geldi" />}
+            </div>
+          );
+        })}
+      </div>
+      <div className="legend">
+        {answered.length === 0
+          ? "Henüz akşam cevabı yok."
+          : `${answered.length} cevap · 🔥 ${counts.strong} · 🌱 ${counts.partial} · 🤍 ${counts.hard}`}
+      </div>
+      {alarm && (
+        <div className="banner bad" style={{ marginTop: 8, marginBottom: 0 }}>
+          Son üç akşam da <b>zorlandı</b> işaretledi. Bırakmadan önce genelde bu görülür.
+        </div>
+      )}
+    </div>
   );
 }
 

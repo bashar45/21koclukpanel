@@ -150,3 +150,25 @@ input, textarea { font: inherit; color: inherit; }
 audio.media, video.media { width: 260px; height: auto; object-fit: initial; }
 /* fotoğraf açıklaması (caption): kullanıcının öz değerlendirmesi buraya gelir */
 .cap { margin-top: 2px; }
+
+/* ---------- 21 günün ızgarası ---------- */
+.grid21 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cell {
+  position: relative; aspect-ratio: 1; border-radius: 6px;
+  border: 1px solid var(--line); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px; cursor: default;
+}
+.cell .n { font-size: .64rem; color: var(--muted); line-height: 1; }
+.cell .m { font-size: .8rem; line-height: 1; }
+.cell.t-strong  { background: var(--accent-soft); border-color: var(--accent); }
+.cell.t-partial { background: var(--warn-soft);   border-color: var(--warn); }
+/* "zor" kırmızı DEĞİL: başarısızlık değil, zor bir gün. Koç görsün, kullanıcı suçlanmasın. */
+.cell.t-hard    { background: var(--panel); border-style: dashed; }
+.cell.t-none    { opacity: .55; }
+.cell.t-future  { opacity: .22; }
+/* kanıt fotoğrafı geldiyse köşede nokta */
+.cell .dot {
+  position: absolute; top: 3px; right: 3px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent);
+}
+.legend { color: var(--muted); font-size: .8rem; margin-top: 8px; }

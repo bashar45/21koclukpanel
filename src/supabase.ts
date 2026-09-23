@@ -87,6 +87,30 @@ export async function fetchEnrollment(contactId: string): Promise<Enrollment | n
   return (data?.[0] as Enrollment) ?? null;
 }
 
+export type Tone = "strong" | "partial" | "hard";
+
+export interface DayProgress {
+  day_no: number;
+  for_date: string;
+  template_sent_at: string | null;
+  ready_at: string | null;
+  lesson_sent_at: string | null;
+  completed_at: string | null;
+  evening_answer_tone: Tone | null;
+  evening_answer_label: string | null;
+  evening_answered_at: string | null;
+}
+
+export async function fetchProgress(enrollmentId: string): Promise<DayProgress[]> {
+  const { data, error } = await sb
+    .from("daily_progress")
+    .select("day_no,for_date,template_sent_at,ready_at,lesson_sent_at,completed_at,evening_answer_tone,evening_answer_label,evening_answered_at")
+    .eq("enrollment_id", enrollmentId)
+    .order("day_no", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as DayProgress[];
+}
+
 export async function fetchContract(enrollmentId: string): Promise<string | null> {
   const { data, error } = await sb.rpc("onboarding_contract", { p_enrollment_id: enrollmentId });
   if (error) return null; // sözleşme yoksa panel yine çalışsın
